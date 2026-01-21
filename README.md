@@ -82,8 +82,8 @@ QWEN_API_URL = "http://127.0.0.1:1234/v1/chat/completions"
 
 ## Running the Application
 
-**Start the local LLM server**
-Default: http://127.0.0.1:1234/v1
+**First, start the local LLM server!**
+Default through LM Studio: http://127.0.0.1:1234/v1
 
 **Option 1: Use the start script**
 ```bash
@@ -145,3 +145,4 @@ llm-council/
 This extension to Karpathy's original project was inspired from:
 - **[Chorus](https://www.youtube.com/watch?v=8CoBHyIiHMM&feature=youtu.be)**: The final project I made during the Fall 2025 semester for CSE 2004, Web Development, at Washington University in St. Louis
 - **[Vending-Bench](https://arxiv.org/pdf/2502.15840)**: The original inspiration for me to create multi-agent systems with AI (with tool calling)
+- **[Pewdiepie's Swarm](https://www.youtube.com/watch?v=qw4fDU18RcU&vl=en-US)**: Inspiration for building agents with different personalities and voting mechanisms

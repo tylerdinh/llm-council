@@ -1,50 +1,52 @@
-.stage2 {
-  margin-top: 20px;
-}
-
 .stage-description {
   color: #666;
   font-size: 14px;
-  margin-bottom: 15px;
+  margin-bottom: 16px;
+  line-height: 1.5;
 }
 
 .round-selector {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 8px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
 }
 
 .round-button {
   padding: 8px 16px;
   background: #f5f5f5;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  color: #666;
   cursor: pointer;
   font-size: 14px;
   transition: all 0.2s;
 }
 
 .round-button:hover {
-  background: #e8e8e8;
+  background: #f0f0f0;
+  color: #333;
+  border-color: #4a90e2;
 }
 
 .round-button.active {
   background: #4a90e2;
-  color: white;
+  color: #ffffff;
   border-color: #4a90e2;
+  font-weight: 600;
 }
 
 .collaboration-log {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 16px;
 }
 
 .collaboration-entry {
-  padding: 15px;
+  padding: 16px;
   border-radius: 8px;
   border: 1px solid #e0e0e0;
+  background: #ffffff;
 }
 
 .collaboration-entry.message-delivery {
@@ -61,14 +63,14 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   font-size: 14px;
 }
 
 .from-member,
 .to-member {
   font-weight: 600;
-  color: #2d3436;
+  color: #333;
 }
 
 .arrow {
@@ -77,19 +79,20 @@
 }
 
 .message-text {
-  color: #2d3436;
-  line-height: 1.5;
+  color: #333;
+  line-height: 1.6;
 }
 
 .member-header {
   margin-bottom: 8px;
-  color: #2d3436;
+  color: #333;
   font-size: 14px;
+  font-weight: 600;
 }
 
 .member-content {
-  color: #2d3436;
-  line-height: 1.5;
+  color: #333;
+  line-height: 1.6;
   margin-bottom: 8px;
 }
 
@@ -97,13 +100,13 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .tool-call {
-  background: #fff;
+  background: #ffffff;
   padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: 6px;
   border: 1px solid #e0e0e0;
   font-size: 13px;
 }

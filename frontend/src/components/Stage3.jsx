@@ -21,8 +21,8 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
   }
 
   return (
-    <div className="stage stage2">
-      <h3 className="stage-title">Stage 2: Peer Rankings</h3>
+    <div className="stage stage3">
+      <h3 className="stage-title">Stage 3: Peer Rankings</h3>
 
       <h4>Raw Evaluations</h4>
       <p className="stage-description">
