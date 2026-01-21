@@ -4,46 +4,67 @@ This file contains technical details, architectural decisions, and important imp
 
 ## Project Overview
 
-LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively answer user questions. The key innovation is anonymized peer review in Stage 2, preventing models from playing favorites.
+LLM Council is a 4-stage deliberation system where multiple LLMs collaboratively answer user questions. The key innovations are:
+1. Stage 2 collaboration through tool-based messaging (inspired by chorus-text)
+2. Anonymized peer review in Stage 3 to prevent models from playing favorites
 
 ## Architecture
 
 ### Backend Structure (`backend/`)
 
 **`config.py`**
-- Contains `COUNCIL_MODELS` (list of OpenRouter model identifiers)
+- Contains `COUNCIL_MEMBERS` (dict of member configs with unique identities)
+- Each member has: name, model, personality, traits, and role
+- Similar structure to chorus-text's `AGENTS` configuration
 - Contains `CHAIRMAN_MODEL` (model that synthesizes final answer)
 - Uses environment variable `OPENROUTER_API_KEY` from `.env`
 - Backend runs on **port 8001** (NOT 8000 - user had another app on 8000)
 
 **`openrouter.py`**
-- `query_model()`: Single async model query
-- `query_models_parallel()`: Parallel queries using `asyncio.gather()`
-- Returns dict with 'content' and optional 'reasoning_details'
+- `query_model()`: Single async model query with optional system_prompt and tools parameters
+- Supports tool calling via the `tools` parameter
+- `query_members_parallel()`: Parallel queries to all council members
+- Builds unique system prompts for each member based on their personality/traits
+- Returns dict mapping member_id to response
 - Graceful degradation: returns None on failure, continues with successful responses
 
+**`tools.py`**
+- `ToolExecutor`: Executes tools called by council members during collaboration
+- `send_message`: Allows members to communicate with each other
+- `TOOLS`: List of tool definitions in OpenAI function calling format
+- Inspired by chorus-text's multi-agent messaging system
+
 **`council.py`** - The Core Logic
-- `stage1_collect_responses()`: Parallel queries to all council models
-- `stage2_collect_rankings()`:
+- `stage1_collect_responses()`: Parallel queries to all council members with their unique personalities
+- Returns list with member_id, member_name, model, role, and response
+- `stage2_collaboration()`: **NEW** - Members exchange messages using tool calls
+  - Max 2 rounds of collaboration by default
+  - Tool executor processes `send_message` calls
+  - Returns collaboration log with all exchanges and tool calls
+- `stage3_collect_rankings()`:
+- `stage3_collect_rankings()`:
   - Anonymizes responses as "Response A, B, C, etc."
-  - Creates `label_to_model` mapping for de-anonymization
-  - Prompts models to evaluate and rank (with strict format requirements)
-  - Returns tuple: (rankings_list, label_to_model_dict)
-  - Each ranking includes both raw text and `parsed_ranking` list
-- `stage3_synthesize_final()`: Chairman synthesizes from all responses + rankings
+  - Creates `label_to_member` mapping (maps to member_name, not model)
+  - Prompts members to evaluate and rank (with strict format requirements)
+  - Returns tuple: (rankings_list, label_to_member_dict)
+  - Each ranking includes member_id, member_name, model, raw text and `parsed_ranking` list
+- `stage4_synthesize_final()`: Chairman synthesizes from all responses + collaboration + rankings
+- Shows member names and roles in context to chairman
+- Includes collaboration summary in chairman's context
 - `parse_ranking_from_text()`: Extracts "FINAL RANKING:" section, handles both numbered lists and plain format
 - `calculate_aggregate_rankings()`: Computes average rank position across all peer evaluations
 
 **`storage.py`**
 - JSON-based conversation storage in `data/conversations/`
 - Each conversation: `{id, created_at, messages[]}`
-- Assistant messages contain: `{role, stage1, stage2, stage3}`
+- Assistant messages contain: `{role, stage1, stage2, stage3, stage4}`
 - Note: metadata (label_to_model, aggregate_rankings) is NOT persisted to storage, only returned via API
 
 **`main.py`**
 - FastAPI app with CORS enabled for localhost:5173 and localhost:3000
 - POST `/api/conversations/{id}/message` returns metadata in addition to stages
-- Metadata includes: label_to_model mapping and aggregate_rankings
+- POST `/api/conversations/{id}/message/stream` streams all 4 stages with SSE
+- Metadata includes: label_to_member mapping and aggregate_rankings
 
 ### Frontend Structure (`frontend/src/`)
 
@@ -58,17 +79,26 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - User messages wrapped in markdown-content class for padding
 
 **`components/Stage1.jsx`**
-- Tab view of individual model responses
+- Tab view of individual member responses
+- Shows member name and role
 - ReactMarkdown rendering with markdown-content wrapper
 
 **`components/Stage2.jsx`**
-- **Critical Feature**: Tab view showing RAW evaluation text from each model
-- De-anonymization happens CLIENT-SIDE for display (models receive anonymous labels)
+- **NEW**: Displays collaboration exchanges between council members
+- Shows messages sent between members using tool calls
+- Round-based view with tabs for multiple collaboration rounds
+- Displays both member responses and inter-member messages
+- Shows tool usage (send_message calls)
+
+**`components/Stage3.jsx`** (formerly Stage2.jsx)
+- **Critical Feature**: Tab view showing RAW evaluation text from each member
+- De-anonymization happens CLIENT-SIDE for display (members receive anonymous labels)
+- Shows member names in evaluations and rankings
 - Shows "Extracted Ranking" below each evaluation so users can validate parsing
 - Aggregate rankings shown with average position and vote count
-- Explanatory text clarifies that boldface model names are for readability only
+- Explanatory text clarifies that boldface member names are for readability only
 
-**`components/Stage3.jsx`**
+**`components/Stage4.jsx`** (formerly Stage3.jsx)
 - Final synthesized answer from chairman
 - Green-tinted background (#f0fff0) to highlight conclusion
 
@@ -80,7 +110,16 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 
 ## Key Design Decisions
 
-### Stage 2 Prompt Format
+### Stage 2 Collaboration (NEW)
+Inspired by chorus-text's multi-agent system:
+- Council members can send messages to each other via `send_message` tool
+- Messages are queued and delivered to recipients
+- Each member maintains conversation history including received messages
+- Members get 2 rounds of collaboration by default
+- Tool calls are logged and displayed to users for transparency
+- This allows members to critique, question, and build on each other's ideas
+
+### Stage 3 Prompt Format
 The Stage 2 prompt is very specific to ensure parseable output:
 ```
 1. Evaluate each response individually first
@@ -92,11 +131,18 @@ The Stage 2 prompt is very specific to ensure parseable output:
 This strict format allows reliable parsing while still getting thoughtful evaluations.
 
 ### De-anonymization Strategy
-- Models receive: "Response A", "Response B", etc.
-- Backend creates mapping: `{"Response A": "openai/gpt-5.1", ...}`
-- Frontend displays model names in **bold** for readability
+- Members receive: "Response A", "Response B", etc.
+- Backend creates mapping: `{"Response A": "Alice", "Response B": "Bob", ...}`
+- Frontend displays member names in **bold** for readability
 - Users see explanation that original evaluation used anonymous labels
 - This prevents bias while maintaining transparency
+
+### Council Member Configuration
+- Each member has unique name, personality, traits, and role
+- Members receive personalized system prompts based on their configuration
+- Similar to chorus-text's agent-based approach
+- Allows different perspectives and thinking styles in deliberation
+- All members can use the same or different underlying models
 
 ### Error Handling Philosophy
 - Continue with successful responses if some models fail (graceful degradation)
@@ -123,7 +169,14 @@ All backend modules use relative imports (e.g., `from .config import ...`) not a
 All ReactMarkdown components must be wrapped in `<div className="markdown-content">` for proper spacing. This class is defined globally in `index.css`.
 
 ### Model Configuration
-Models are hardcoded in `backend/config.py`. Chairman can be same or different from council members. The current default is Gemini as chairman per user preference.
+Members are configured as a dict in `backend/config.py` with each member having:
+- `name`: Display name (e.g., "Alice")
+- `model`: Model identifier (e.g., "qwen/qwen3-1.7b")
+- `personality`: Description of thinking style
+- `traits`: List of personality traits
+- `role`: Member's role in deliberation
+
+Chairman can be same or different from council member models. The current default is Gemini as chairman per user preference.
 
 ## Common Gotchas
 

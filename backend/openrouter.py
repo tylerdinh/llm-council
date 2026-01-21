@@ -1,40 +1,54 @@
-"""OpenRouter API client for making LLM requests."""
+"""Local Qwen client for making LLM requests."""
 
 import httpx
 from typing import List, Dict, Any, Optional
-from .config import OPENROUTER_API_KEY, OPENROUTER_API_URL
+from .config import QWEN_API_URL, MAX_TOKENS
 
 
 async def query_model(
     model: str,
     messages: List[Dict[str, str]],
-    timeout: float = 120.0
+    timeout: float = 120.0,
+    system_prompt: Optional[str] = None,
+    tools: Optional[List[Dict[str, Any]]] = None
 ) -> Optional[Dict[str, Any]]:
     """
-    Query a single model via OpenRouter API.
+    Query a single model via local Qwen API.
 
     Args:
-        model: OpenRouter model identifier (e.g., "openai/gpt-4o")
+        model: Model identifier (e.g., "qwen/qwen3-1.7b")
         messages: List of message dicts with 'role' and 'content'
         timeout: Request timeout in seconds
+        system_prompt: Optional system prompt to prepend
+        tools: Optional list of tool definitions for function calling
 
     Returns:
-        Response dict with 'content' and optional 'reasoning_details', or None if failed
+        Response dict with 'content', optional 'reasoning_details', and optional 'tool_calls', or None if failed
     """
+
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
     }
 
+    # Prepend system prompt if provided
+    final_messages = messages
+    if system_prompt:
+        final_messages = [{"role": "system", "content": system_prompt}] + messages
+
     payload = {
         "model": model,
-        "messages": messages,
+        "messages": final_messages,
+        "max_tokens": MAX_TOKENS,
     }
+    
+    # Add tools if provided
+    if tools:
+        payload["tools"] = tools
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
-                OPENROUTER_API_URL,
+                QWEN_API_URL,
                 headers=headers,
                 json=payload
             )
@@ -45,7 +59,8 @@ async def query_model(
 
             return {
                 'content': message.get('content'),
-                'reasoning_details': message.get('reasoning_details')
+                'reasoning_details': message.get('reasoning_details'),
+                'tool_calls': message.get('tool_calls', [])
             }
 
     except Exception as e:
@@ -53,27 +68,45 @@ async def query_model(
         return None
 
 
-async def query_models_parallel(
-    models: List[str],
+async def query_members_parallel(
+    members: Dict[str, Dict[str, Any]],
     messages: List[Dict[str, str]]
 ) -> Dict[str, Optional[Dict[str, Any]]]:
     """
-    Query multiple models in parallel.
+    Query multiple council members in parallel.
 
     Args:
-        models: List of OpenRouter model identifiers
-        messages: List of message dicts to send to each model
+        members: Dict of member configs (from COUNCIL_MEMBERS)
+        messages: List of message dicts to send to each member
 
     Returns:
-        Dict mapping model identifier to response dict (or None if failed)
+        Dict mapping member_id to response dict (or None if failed)
     """
     import asyncio
 
-    # Create tasks for all models
-    tasks = [query_model(model, messages) for model in models]
+    # Build system prompts for each member
+    def build_system_prompt(member_config: Dict[str, Any]) -> str:
+        """Build system prompt from member configuration."""
+        traits_str = ", ".join(member_config.get("traits", []))
+        return f"""You are {member_config['name']}, a council member in a multi-model deliberation system.
+
+Role: {member_config['role']}
+Personality: {member_config['personality']}
+Traits: {traits_str}
+
+You collaborate with other models to answer questions. Stay in character and leverage your unique perspective."""
+
+    # Create tasks for all members with their system prompts
+    tasks = []
+    member_ids = []
+    for member_id, member_config in members.items():
+        system_prompt = build_system_prompt(member_config)
+        task = query_model(member_config['model'], messages, system_prompt=system_prompt)
+        tasks.append(task)
+        member_ids.append(member_id)
 
     # Wait for all to complete
     responses = await asyncio.gather(*tasks)
 
-    # Map models to their responses
-    return {model: response for model, response in zip(models, responses)}
+    # Map member IDs to their responses
+    return {member_id: response for member_id, response in zip(member_ids, responses)}
