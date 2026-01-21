@@ -82,6 +82,9 @@ QWEN_API_URL = "http://127.0.0.1:1234/v1/chat/completions"
 
 ## Running the Application
 
+**Start the local LLM server**
+Default: http://127.0.0.1:1234/v1
+
 **Option 1: Use the start script**
 ```bash
 ./start.sh
