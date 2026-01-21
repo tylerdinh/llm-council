@@ -2,17 +2,28 @@
 
 ![llmcouncil](header.jpg)
 
-The idea of this repo is that instead of asking a question to your favorite LLM provider (e.g. OpenAI GPT 5.1, Google Gemini 3.0 Pro, Anthropic Claude Sonnet 4.5, xAI Grok 4, eg.c), you can group them into your "LLM Council". This repo is a simple, local web app that essentially looks like ChatGPT except it uses OpenRouter to send your query to multiple LLMs, it then asks them to review and rank each other's work, and finally a Chairman LLM produces the final response.
+A collaborative AI deliberation system where multiple LLMs with distinct personalities work together to answer questions.
 
-In a bit more detail, here is what happens when you submit a query:
+## How It Works
 
-1. **Stage 1: First opinions**. The user query is given to all LLMs individually, and the responses are collected. The individual responses are shown in a "tab view", so that the user can inspect them all one by one.
-2. **Stage 2: Review**. Each individual LLM is given the responses of the other LLMs. Under the hood, the LLM identities are anonymized so that the LLM can't play favorites when judging their outputs. The LLM is asked to rank them in accuracy and insight.
-3. **Stage 3: Final response**. The designated Chairman of the LLM Council takes all of the model's responses and compiles them into a single final answer that is presented to the user.
+When you submit a query, the council goes through 4 stages:
 
-## Vibe Code Alert
+1. **Stage 1: Individual Responses**. Each council member (with unique personalities and roles) independently responds to your question. Members have distinct traits like "analytical", "creative", or "diplomatic" that influence their perspectives.
 
-This project was 99% vibe coded as a fun Saturday hack because I wanted to explore and evaluate a number of LLMs side by side in the process of [reading books together with LLMs](https://x.com/karpathy/status/1990577951671509438). It's nice and useful to see multiple responses side by side, and also the cross-opinions of all LLMs on each other's outputs. I'm not going to support it in any way, it's provided here as is for other people's inspiration and I don't intend to improve it. Code is ephemeral now and libraries are over, ask your LLM to change it in whatever way you like.
+2. **Stage 2: Collaboration**. Council members engage in multi-round discussions using tool-based messaging. They can send messages to each other to critique, question, and build on ideas. This allows for real-time deliberation and refinement.
+
+3. **Stage 3: Peer Review**. Each member evaluates all initial responses (anonymized as "Response A, B, C, etc.") to prevent bias. They rank the responses based on accuracy and insight, with results aggregated into "street cred" rankings.
+
+4. **Stage 4: Final Synthesis**. The Chairman synthesizes all responses, collaboration exchanges, and peer rankings into a comprehensive final answer that represents the council's collective wisdom.
+
+## Features
+
+- **Multi-Agent Collaboration**: Council members communicate via tool-based messaging to refine their thinking
+- **Unique Personalities**: Each member has distinct traits, roles, and perspectives
+- **Anonymized Peer Review**: Prevents bias by hiding identities during evaluation
+- **Aggregate Rankings**: "Street cred" system shows which responses the council collectively values
+- **Streaming UI**: Watch each stage unfold in real-time as the council deliberates
+- **Local Storage**: All conversations saved as JSON for easy inspection and portability
 
 ## Setup
 
@@ -32,29 +43,41 @@ npm install
 cd ..
 ```
 
-### 2. Configure API Key
+### 2. Configure Local LLM Server
 
-Create a `.env` file in the project root:
+This project uses a **local Qwen API server** (LM Studio or similar) instead of OpenRouter. 
 
-```bash
-OPENROUTER_API_KEY=sk-or-v1-...
-```
+1. Install [LM Studio](https://lmstudio.ai/) or run your own OpenAI-compatible API server
+2. Load a model (e.g., Qwen 3 1.7B or any other model)
+3. Start the local server (default: http://127.0.0.1:1234/v1)
 
-Get your API key at [openrouter.ai](https://openrouter.ai/). Make sure to purchase the credits you need, or sign up for automatic top up.
+**Note:** The default configuration in `backend/config.py` uses Qwen 3 1.7B for all members and the chairman. You can modify this to use different models or different API endpoints.
 
-### 3. Configure Models (Optional)
+### 3. Configure Council Members (Optional)
 
-Edit `backend/config.py` to customize the council:
+Edit `backend/config.py` to customize council members:
 
 ```python
-COUNCIL_MODELS = [
-    "openai/gpt-5.1",
-    "google/gemini-3-pro-preview",
-    "anthropic/claude-sonnet-4.5",
-    "x-ai/grok-4",
-]
+COUNCIL_MEMBERS = {
+    "alice": {
+        "name": "Alice",
+        "model": "qwen/qwen3-1.7b",
+        "personality": "analytical and methodical",
+        "traits": ["logical", "detail-oriented", "skeptical"],
+        "role": "Analyst - breaks down problems systematically"
+    },
+    "bob": {
+        "name": "Bob",
+        "model": "qwen/qwen3-1.7b",
+        "personality": "creative and enthusiastic",
+        "traits": ["imaginative", "optimistic", "spontaneous"],
+        "role": "Innovator - generates creative solutions"
+    },
+    # Add more members...
+}
 
-CHAIRMAN_MODEL = "google/gemini-3-pro-preview"
+CHAIRMAN_MODEL = "qwen/qwen3-1.7b"
+QWEN_API_URL = "http://127.0.0.1:1234/v1/chat/completions"
 ```
 
 ## Running the Application
@@ -79,9 +102,43 @@ npm run dev
 
 Then open http://localhost:5173 in your browser.
 
+**Note:** The backend runs on port 8001 (not 8000) to avoid conflicts with other applications.
+
+## Project Structure
+
+```
+llm-council/
+├── backend/
+│   ├── config.py          # Council member configurations & settings
+│   ├── council.py         # 4-stage orchestration logic
+│   ├── openrouter.py      # Local Qwen API client
+│   ├── tools.py           # Tool execution (send_message, etc.)
+│   ├── storage.py         # JSON-based conversation storage
+│   └── main.py            # FastAPI server
+├── frontend/
+│   └── src/
+│       ├── components/
+│       │   ├── Stage1.jsx # Individual responses tab view
+│       │   ├── Stage2.jsx # Collaboration exchanges
+│       │   ├── Stage3.jsx # Peer rankings & aggregate scores
+│       │   └── Stage4.jsx # Final synthesized answer
+│       ├── App.jsx        # Main app orchestration
+│       └── api.js         # Backend API client
+├── data/
+│   └── conversations/     # Stored conversations (JSON)
+└── CLAUDE.md             # Technical architecture documentation
+```
+
 ## Tech Stack
 
-- **Backend:** FastAPI (Python 3.10+), async httpx, OpenRouter API
+- **Backend:** FastAPI (Python 3.10+), async httpx, Local Qwen API
 - **Frontend:** React + Vite, react-markdown for rendering
 - **Storage:** JSON files in `data/conversations/`
 - **Package Management:** uv for Python, npm for JavaScript
+- **AI Orchestration:** Multi-agent collaboration with tool calling
+
+## Inspiration
+
+This extension to Karpathy's original project was inspired from:
+- **[Chorus](https://www.youtube.com/watch?v=8CoBHyIiHMM&feature=youtu.be)**: The final project I made during the Fall 2025 semester for CSE 2004, Web Development, at Washington University in St. Louis
+- **[Vending-Bench](https://arxiv.org/pdf/2502.15840)**: The original inspiration for me to create multi-agent systems with AI (with tool calling)
