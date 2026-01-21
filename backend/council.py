@@ -205,7 +205,8 @@ Review these responses and decide if you want to engage with other council membe
 
 async def stage3_collect_rankings(
     user_query: str,
-    stage1_results: List[Dict[str, Any]]
+    stage1_results: List[Dict[str, Any]],
+    stage2_results: List[Dict[str, Any]]
 ) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
     """
     Stage 3: Each member ranks the anonymized responses.
@@ -213,6 +214,7 @@ async def stage3_collect_rankings(
     Args:
         user_query: The original user query
         stage1_results: Results from Stage 1
+        stage2_results: Collaboration exchanges from Stage 2
 
     Returns:
         Tuple of (rankings list, label_to_member mapping)
@@ -226,6 +228,28 @@ async def stage3_collect_rankings(
         for label, result in zip(labels, stage1_results)
     }
 
+    # Build the ranking prompt with initial responses
+    responses_text = "\n\n".join([
+        f"Response {label}:\n{result['response']}"
+        for label, result in zip(labels, stage1_results)
+    ])
+
+    # Build collaboration summary (anonymized)
+    collaboration_text = ""
+    if stage2_results:
+        # Create reverse mapping from member name to label
+        member_to_label = {v: k for k, v in label_to_member.items()}
+        
+        collab_messages = []
+        for entry in stage2_results:
+            if entry.get('type') == 'message_delivery':
+                from_label = member_to_label.get(entry['from'], entry['from'])
+                to_label = member_to_label.get(entry['to'], entry['to'])
+                collab_messages.append(f"{from_label} → {to_label}: {entry['message']}")
+        
+        if collab_messages:
+            collaboration_text = "\n\nCollaboration Exchanges:\n" + "\n".join(collab_messages)
+
     # Build the ranking prompt
     responses_text = "\n\n".join([
         f"Response {label}:\n{result['response']}"
@@ -238,11 +262,12 @@ Question: {user_query}
 
 Here are the responses from different models (anonymized):
 
-{responses_text}
+{responses_text}{collaboration_text}
 
 Your task:
-1. First, evaluate each response individually. For each response, explain what it does well and what it does poorly.
-2. Then, at the very end of your response, provide a final ranking.
+1. First, evaluate each response individually. Consider both the initial response AND their engagement in collaboration (if any).
+2. For each response, explain what it does well and what it does poorly.
+3. Then, at the very end of your response, provide a final ranking.
 
 IMPORTANT: Keep your evaluation concise - use ONE brief paragraph per response (2-3 sentences each).
 
@@ -512,7 +537,7 @@ async def run_full_council(user_query: str) -> Tuple[List, List, List, Dict, Dic
     stage2_results = await stage2_collaboration(user_query, stage1_results, max_rounds=2)
 
     # Stage 3: Collect rankings
-    stage3_results, label_to_model = await stage3_collect_rankings(user_query, stage1_results)
+    stage3_results, label_to_model = await stage3_collect_rankings(user_query, stage1_results, stage2_results)
 
     # Calculate aggregate rankings
     aggregate_rankings = calculate_aggregate_rankings(stage3_results, label_to_model)

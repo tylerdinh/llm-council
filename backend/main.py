@@ -161,7 +161,7 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
 
             # Stage 3: Collect rankings
             yield f"data: {json.dumps({'type': 'stage3_start'})}\n\n"
-            stage3_results, label_to_model = await stage3_collect_rankings(request.content, stage1_results)
+            stage3_results, label_to_model = await stage3_collect_rankings(request.content, stage1_results, stage2_results)
             aggregate_rankings = calculate_aggregate_rankings(stage3_results, label_to_model)
             yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings}})}\n\n"
 
